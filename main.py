@@ -17,13 +17,13 @@ from umap import UMAP  # Make sure umap-learn is installed
 
 # -------- CONFIG CONSTANTS --------
 N_CHANNELS = 62          # Original number of EEG channels
-REDUCED_CHANNELS = 2   # New channel dimension after applying manifold learning (UMAP)
+REDUCED_CHANNELS = 2     # New channel dimension after applying manifold learning (UMAP)
 SAMPLING_RATE = 200      # Hz (downsampled from 1000Hz)
 SAMPLES_PER_EPOCH = 256  # Epoch length in samples
 NUM_CLASSES = 4          # SEED-IV has 4 classes (0: Neutral, 1: Sad, 2: Fear, 3: Happy)
 
 # Directory containing .mat files for SEED-IV (session 1)
-DATASET_DIR = "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1"
+DATASET_DIR = r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1"
 
 # Regex pattern to match EEG trial keys (e.g., "ha_eeg1", "cz_eeg24")
 EEG_KEY_PATTERN = re.compile(r".+_eeg\d+$")
@@ -125,6 +125,7 @@ def scale_dataset(X):
     Scale the dataset using StandardScaler.
     X is expected to have shape: (total_epochs, time, channels, 1)
     """
+    from sklearn.preprocessing import StandardScaler
     original_shape = X.shape
     X_reshaped = X.reshape(original_shape[0], -1)
     scaler = StandardScaler()
@@ -132,18 +133,25 @@ def scale_dataset(X):
     return X_scaled.reshape(original_shape)
 
 # -------- MANIFOLD LEARNING: APPLY UMAP --------
-def apply_umap(X, n_components=REDUCED_CHANNELS):
+def apply_umap(X, n_components=REDUCED_CHANNELS, batch_size=5000):
     """
-    Apply UMAP to reduce the channel dimension.
-    Input shape: (total_epochs, time, channels, 1)
-    We reshape to (total_epochs * time, channels), apply UMAP,
-    then reshape back to (total_epochs, time, n_components, 1).
+    Apply UMAP to reduce channel dimensions while handling memory efficiently.
+    Processes data in batches to prevent memory overflow.
     """
     total_epochs, time, channels, _ = X.shape
     X_reshaped = X.reshape(total_epochs * time, channels)
-    reducer = UMAP(n_neighbors=10, n_components=n_components, min_dist=0.1, metric="euclidean", random_state=42, n_jobs=-1)
-    X_umap = reducer.fit_transform(X_reshaped)
+
+    reducer = UMAP(n_neighbors=10, n_components=n_components, min_dist=0.1, 
+                   metric="euclidean", random_state=42)
+    
+    X_umap_list = []
+    for i in range(0, X_reshaped.shape[0], batch_size):
+        batch = X_reshaped[i : i + batch_size]
+        X_umap_list.append(reducer.fit_transform(batch))
+    
+    X_umap = np.vstack(X_umap_list)
     X_umap = X_umap.reshape(total_epochs, time, n_components, 1)
+    
     return X_umap
 
 # -------- STEP 3: BUILD CNN MODEL --------
@@ -155,12 +163,13 @@ def build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM
     inputs = tf.keras.Input(shape=input_shape + (1,))  # expects (256, reduced_channels, 1)
     x = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same',
                                kernel_regularizer=tf.keras.regularizers.l2(1e-3))(inputs)
-    x = tf.keras.layers.MaxPooling2D((2, 2))(x)
+    # Changed pooling to (2,1) to avoid negative dimensions (width remains >= 1)
+    x = tf.keras.layers.MaxPooling2D((2, 1))(x)
     x = tf.keras.layers.Dropout(0.5)(x)
     
     x = tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same',
                                kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
-    x = tf.keras.layers.MaxPooling2D((2, 2))(x)
+    x = tf.keras.layers.MaxPooling2D((2, 1))(x)
     x = tf.keras.layers.Dropout(0.5)(x)
     
     x = tf.keras.layers.Flatten()(x)
@@ -241,25 +250,25 @@ def plot_history(history):
 if __name__ == "__main__":
     # List of 15 session 1 files for a subject (update filenames as needed)
     dataset_paths = [
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/1_20160518.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/2_20150915.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/3_20150919.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/4_20151111.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/5_20160406.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/6_20150507.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/7_20150715.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/8_20151103.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/9_20151028.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/10_20151014.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/11_20150916.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/12_20150725.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/13_20151115.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/14_20151205.mat",
-        "C:/Varun/AI Project/Datasets/Seed-IV/eeg_raw_data/1/15_20150508.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\1_20160518.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\2_20150915.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\3_20150919.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\4_20151111.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\5_20160406.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\6_20150507.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\7_20150715.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\8_20151103.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\9_20151028.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\10_20151014.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\11_20150916.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\12_20150725.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\13_20151115.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\14_20151205.mat",
+        r"C:\sandhyaa\ai\archive\seed_iv\eeg_raw_data\1\15_20150508.mat",
     ]
     
     X_train, X_test, y_train, y_test = seed_data_pipeline(dataset_paths)
-    print("Training Data Shape:", X_train.shape)
+    print("Training Data Shape:", X_train.shape)                                                                                                                     
     print("Testing Data Shape:", X_test.shape)
     
     model = build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
@@ -273,3 +282,7 @@ if __name__ == "__main__":
                         epochs=30, batch_size=32, callbacks=[lr_reduce])
     
     plot_history(history)
+    
+    # Save the trained model as an HDF5 file
+    model.save("my_model.h5")
+    print("Model saved as 'my_model.h5'.")
