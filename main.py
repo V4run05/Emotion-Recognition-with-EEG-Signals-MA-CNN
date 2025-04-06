@@ -18,19 +18,19 @@ from umap.umap_ import UMAP  # Ensure umap-learn is installed
 
 # -------- CONFIG CONSTANTS --------
 N_CHANNELS = 62          # Original number of EEG channels
-REDUCED_CHANNELS = 2     # New channel dimension after applying manifold learning (UMAP)
+REDUCED_CHANNELS = 4     # New channel dimension after applying manifold learning (UMAP)
 SAMPLING_RATE = 200      # Hz (downsampled from 1000Hz)
 SAMPLES_PER_EPOCH = 256  # Epoch length in samples
 NUM_CLASSES = 4          # SEED-IV has 4 classes (0: Neutral, 1: Sad, 2: Fear, 3: Happy)
 
 # -------- UMAP PARAMETERS (adjust these to experiment) --------
 umap_params = {
-    'n_neighbors': 10,
+    'n_neighbors': 15,
     'n_components': REDUCED_CHANNELS,
-    'min_dist': 0.1,
+    'min_dist': 0.05,
     'metric': "euclidean",
     'random_state': 42,
-    'batch_size': 5\000  # Adjust batch size if needed
+    'batch_size': 2000  # Adjust batch size if needed
 }
 
 # Directory containing .mat files for SEED-IV (session 1)
@@ -182,24 +182,33 @@ def apply_umap(X, n_components=REDUCED_CHANNELS, batch_size=umap_params['batch_s
 
 # -------- STEP 3: BUILD CNN MODEL --------
 def build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES):
-    """
-    Build a simple CNN model for emotion classification.
-    Updated input shape is now (256, reduced_channels, 1) after manifold learning.
-    """
     inputs = tf.keras.Input(shape=input_shape + (1,))  # expects (256, reduced_channels, 1)
-    x = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same',
-                               kernel_regularizer=tf.keras.regularizers.l2(1e-3))(inputs)
-    x = tf.keras.layers.MaxPooling2D((2, 1))(x)  # use pool size (2,1) so that width doesn't collapse
-    x = tf.keras.layers.Dropout(0.5)(x)
+    
+    # First convolution block
     x = tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same',
+                               kernel_regularizer=tf.keras.regularizers.l2(1e-3))(inputs)
+    x = tf.keras.layers.MaxPooling2D((2, 1))(x)  # pool size (2,1) keeps width >= 1
+    x = tf.keras.layers.Dropout(0.5)(x)
+    
+    # Second convolution block (new)
+    x = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same',
                                kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
     x = tf.keras.layers.MaxPooling2D((2, 1))(x)
     x = tf.keras.layers.Dropout(0.5)(x)
+    
+    # Third convolution block (new)
+    x = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same',
+                               kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
+    x = tf.keras.layers.MaxPooling2D((2, 1))(x)
+    x = tf.keras.layers.Dropout(0.5)(x)
+    
+    # Flatten and fully connected layers
     x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Dense(128, activation='relu',
+    x = tf.keras.layers.Dense(256, activation='relu',
                               kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
     x = tf.keras.layers.Dropout(0.4)(x)
     outputs = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
+    
     model = tf.keras.Model(inputs, outputs)
     return model
 
@@ -241,7 +250,7 @@ def oversample_training_data(X_train, y_train):
     print("Oversampled Training Data Shape:", X_resampled.shape)
     return X_resampled, y_resampled
 
-def plot_history(history):
+def plot_history(history, title="Reduced dataset"):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
     ax1.plot(history.history['loss'], label='loss')
     ax1.plot(history.history['val_loss'], label='val_loss')
@@ -257,8 +266,30 @@ def plot_history(history):
     ax2.legend()
     plt.show()
 
+def plot_reduced_dataset(X, y, title="Reduced dataset"):
+    """
+    Plot the UMAP-reduced data in 2D.
+    X is expected to have shape (samples, time, REDUCED_CHANNELS, 1).
+    We'll average over the time dimension so that each sample is represented by a 2D point.
+    y is expected to be one-hot encoded.
+    """
+    # Squeeze the last dimension (if it's 1) and average across time.
+    X_mean = np.mean(X.squeeze(-1), axis=1)  # shape: (samples, REDUCED_CHANNELS)
+    # Get the label index from one-hot encoding.
+    labels = np.argmax(y, axis=1)
+    
+    plt.figure(figsize=(8, 6))
+    for c in np.unique(labels):
+        idx = labels == c
+        plt.scatter(X_mean[idx, 0], X_mean[idx, 1], label=f"Class {c}", alpha=0.6)
+    plt.title(title)
+    plt.xlabel("UMAP Dimension 1")
+    plt.ylabel("UMAP Dimension 2")
+    plt.legend()
+    plt.show()
+
 # -------- MAIN EXECUTION --------
-if _name_ == "_main_":
+if __name__ == "__main__":
     # Ensure GPU is used if available
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
@@ -311,17 +342,19 @@ if _name_ == "_main_":
     print("Testing Data Shape:", X_test.shape)
     
     # If retraining an existing model, load it; otherwise, build a new model.
-    model_path = r"C:\sandhyaa\ai\my_model.h5"
-    if os.path.exists(model_path):
-        try:
-            print("Loading existing model from", model_path)
-            model = tf.keras.models.load_model(model_path)
-        except Exception as e:
-            print("Error loading model, building a new one. Error:", e)
-            model = build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
-    else:
-        print("No existing model found. Building a new model.")
-        model = build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
+    # model_path = r"C:\sandhyaa\ai\my_model.h5"
+    # if os.path.exists(model_path):
+    #     try:
+    #         print("Loading existing model from", model_path)
+    #         model = tf.keras.models.load_model(model_path)
+    #     except Exception as e:
+    #         print("Error loading model, building a new one. Error:", e)
+    #         model = build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
+    # else:
+    
+    # Creating new model
+    print("Building a new model.")
+    model = build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
     
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=5e-4),
                   loss='categorical_crossentropy', metrics=['accuracy'])
@@ -333,9 +366,13 @@ if _name_ == "_main_":
     history = model.fit(X_train, y_train, validation_split=0.2, shuffle=True,
                         epochs=40, batch_size=32, callbacks=[lr_reduce, early_stop])
     
-    plot_history(history)
+    plot_history(history, title="Training Process")
     
+    # Plot the UMAP-reduced training data
+    plot_reduced_dataset(X_train, y_train, title="UMAP Reduced Training Data")
+
+
     # Save the retrained model
-    retrained_model_path = r"C:\sandhyaa\AI-ve\my_ml_project\my_model_retrained.h5"
+    retrained_model_path = r"C:\sandhyaa\AI-ve\my_ml_project\my_model_retrained_1.h5"
     model.save(retrained_model_path)
     print("Model saved as", retrained_model_path)
