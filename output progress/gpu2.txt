@@ -1,0 +1,99 @@
+Oversampled Training Data Shape: (24408, 256, 4, 1)
+Training Data Shape: (19526, 256, 4, 1)
+Testing Data Shape: (4882, 256, 4, 1)
+Building a new model.
+2025-04-06 17:44:20.853041: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-04-06 17:44:21.083665: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 4056 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 2060, pci bus id: 0000:09:00.0, compute capability: 7.5
+Training the model for 40 epochs...
+Epoch 1/40
+2025-04-06 17:44:22.221034: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8907
+2025-04-06 17:44:23.348836: W tensorflow/core/common_runtime/bfc_allocator.cc:290] Allocator (GPU_0_bfc) ran out of memory trying to allocate 4.05GiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+2025-04-06 17:44:23.349062: W tensorflow/core/common_runtime/bfc_allocator.cc:290] Allocator (GPU_0_bfc) ran out of memory trying to allocate 4.05GiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+482/489 [============================>.] - ETA: 0s - loss: 1.9739 - accuracy: 0.25102025-04-06 17:44:27.464984: W tensorflow/core/common_runtime/bfc_allocator.cc:290] Allocator (GPU_0_bfc) ran out of memory trying to allocate 4.30GiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+2025-04-06 17:44:27.465167: W tensorflow/core/common_runtime/bfc_allocator.cc:290] Allocator (GPU_0_bfc) ran out of memory trying to allocate 4.30GiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+2025-04-06 17:44:27.478402: W tensorflow/core/common_runtime/bfc_allocator.cc:290] Allocator (GPU_0_bfc) ran out of memory trying to allocate 4.05GiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+2025-04-06 17:44:27.478561: W tensorflow/core/common_runtime/bfc_allocator.cc:290] Allocator (GPU_0_bfc) ran out of memory trying to allocate 4.05GiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+489/489 [==============================] - 7s 10ms/step - loss: 1.9715 - accuracy: 0.2505 - val_loss: 1.7715 - val_accuracy: 0.2614 - lr: 5.0000e-04
+Epoch 2/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.6838 - accuracy: 0.2508 - val_loss: 1.6091 - val_accuracy: 0.2448 - lr: 5.0000e-04
+Epoch 3/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.5598 - accuracy: 0.2520 - val_loss: 1.5119 - val_accuracy: 0.2471 - lr: 5.0000e-04
+Epoch 4/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.4803 - accuracy: 0.2536 - val_loss: 1.4543 - val_accuracy: 0.2458 - lr: 5.0000e-04
+Epoch 5/40
+489/489 [==============================] - 4s 9ms/step - loss: 1.4376 - accuracy: 0.2468 - val_loss: 1.4234 - val_accuracy: 0.2460 - lr: 5.0000e-04
+Epoch 6/40
+489/489 [==============================] - 4s 9ms/step - loss: 1.4141 - accuracy: 0.2536 - val_loss: 1.4063 - val_accuracy: 0.2465 - lr: 5.0000e-04
+Epoch 7/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.4012 - accuracy: 0.2566 - val_loss: 1.3963 - val_accuracy: 0.2527 - lr: 5.0000e-04
+Epoch 8/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3944 - accuracy: 0.2592 - val_loss: 1.3924 - val_accuracy: 0.2565 - lr: 5.0000e-04
+Epoch 9/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3909 - accuracy: 0.2592 - val_loss: 1.3899 - val_accuracy: 0.2547 - lr: 5.0000e-04
+Epoch 10/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3892 - accuracy: 0.2601 - val_loss: 1.3889 - val_accuracy: 0.2596 - lr: 5.0000e-04
+Epoch 11/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3875 - accuracy: 0.2661 - val_loss: 1.3884 - val_accuracy: 0.2596 - lr: 5.0000e-04
+Epoch 12/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3873 - accuracy: 0.2661 - val_loss: 1.3880 - val_accuracy: 0.2547 - lr: 5.0000e-04
+Epoch 13/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3869 - accuracy: 0.2727 - val_loss: 1.3882 - val_accuracy: 0.2593 - lr: 5.0000e-04
+Epoch 14/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3870 - accuracy: 0.2678 - val_loss: 1.3878 - val_accuracy: 0.2632 - lr: 5.0000e-04
+Epoch 15/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3866 - accuracy: 0.2718 - val_loss: 1.3865 - val_accuracy: 0.2678 - lr: 5.0000e-04
+Epoch 16/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3864 - accuracy: 0.2674 - val_loss: 1.3865 - val_accuracy: 0.2696 - lr: 5.0000e-04
+Epoch 17/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3861 - accuracy: 0.2732 - val_loss: 1.3886 - val_accuracy: 0.2581 - lr: 5.0000e-04
+Epoch 18/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3864 - accuracy: 0.2684 - val_loss: 1.3863 - val_accuracy: 0.2622 - lr: 5.0000e-04
+Epoch 19/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3858 - accuracy: 0.2720 - val_loss: 1.3869 - val_accuracy: 0.2535 - lr: 5.0000e-04
+Epoch 20/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3858 - accuracy: 0.2743 - val_loss: 1.3885 - val_accuracy: 0.2496 - lr: 5.0000e-04
+Epoch 21/40
+484/489 [============================>.] - ETA: 0s - loss: 1.3857 - accuracy: 0.2672
+Epoch 21: ReduceLROnPlateau reducing learning rate to 0.0002500000118743628.
+489/489 [==============================] - 4s 8ms/step - loss: 1.3858 - accuracy: 0.2670 - val_loss: 1.3883 - val_accuracy: 0.2570 - lr: 5.0000e-04
+Epoch 22/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3854 - accuracy: 0.2767 - val_loss: 1.3865 - val_accuracy: 0.2657 - lr: 2.5000e-04
+Epoch 23/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3836 - accuracy: 0.2755 - val_loss: 1.3865 - val_accuracy: 0.2555 - lr: 2.5000e-04
+Epoch 24/40
+483/489 [============================>.] - ETA: 0s - loss: 1.3840 - accuracy: 0.2770
+Epoch 24: ReduceLROnPlateau reducing learning rate to 0.0001250000059371814.
+489/489 [==============================] - 4s 8ms/step - loss: 1.3840 - accuracy: 0.2767 - val_loss: 1.3871 - val_accuracy: 0.2563 - lr: 2.5000e-04
+Epoch 25/40
+489/489 [==============================] - 4s 9ms/step - loss: 1.3830 - accuracy: 0.2786 - val_loss: 1.3857 - val_accuracy: 0.2619 - lr: 1.2500e-04
+Epoch 26/40
+489/489 [==============================] - 4s 9ms/step - loss: 1.3819 - accuracy: 0.2855 - val_loss: 1.3858 - val_accuracy: 0.2601 - lr: 1.2500e-04
+Epoch 27/40
+489/489 [==============================] - 4s 9ms/step - loss: 1.3826 - accuracy: 0.2777 - val_loss: 1.3852 - val_accuracy: 0.2596 - lr: 1.2500e-04
+Epoch 28/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3827 - accuracy: 0.2801 - val_loss: 1.3857 - val_accuracy: 0.2627 - lr: 1.2500e-04
+Epoch 29/40
+489/489 [==============================] - 4s 9ms/step - loss: 1.3828 - accuracy: 0.2815 - val_loss: 1.3859 - val_accuracy: 0.2601 - lr: 1.2500e-04
+Epoch 30/40
+483/489 [============================>.] - ETA: 0s - loss: 1.3825 - accuracy: 0.2807
+Epoch 30: ReduceLROnPlateau reducing learning rate to 6.25000029685907e-05.
+489/489 [==============================] - 4s 9ms/step - loss: 1.3824 - accuracy: 0.2809 - val_loss: 1.3856 - val_accuracy: 0.2596 - lr: 1.2500e-04
+Epoch 31/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3821 - accuracy: 0.2833 - val_loss: 1.3855 - val_accuracy: 0.2632 - lr: 6.2500e-05
+Epoch 32/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3825 - accuracy: 0.2810 - val_loss: 1.3859 - val_accuracy: 0.2616 - lr: 6.2500e-05
+Epoch 33/40
+484/489 [============================>.] - ETA: 0s - loss: 1.3817 - accuracy: 0.2843
+Epoch 33: ReduceLROnPlateau reducing learning rate to 3.125000148429535e-05.
+489/489 [==============================] - 4s 8ms/step - loss: 1.3816 - accuracy: 0.2845 - val_loss: 1.3854 - val_accuracy: 0.2616 - lr: 6.2500e-05
+489/489 [==============================] - 4s 8ms/step - loss: 1.3816 - accuracy: 0.2825 - val_loss: 1.3856 - val_accuracy: 0.2568 - lr: 3.1250e-05
+Epoch 35/40
+489/489 [==============================] - 4s 8ms/step - loss: 1.3810 - accuracy: 0.2830 - val_loss: 1.3853 - val_accuracy: 0.2570 - lr: 3.1250e-05
+Epoch 36/40
+483/489 [============================>.] - ETA: 0s - loss: 1.3817 - accuracy: 0.2807
+Epoch 36: ReduceLROnPlateau reducing learning rate to 1.5625000742147677e-05.
+489/489 [==============================] - 4s 8ms/step - loss: 1.3817 - accuracy: 0.2808 - val_loss: 1.3856 - val_accuracy: 0.2558 - lr: 3.1250e-05
+Epoch 37/40
+489/489 [==============================] - 4s 9ms/step - loss: 1.3804 - accuracy: 0.2868 - val_loss: 1.3855 - val_accuracy: 0.2578 - lr: 1.5625e-05
+Model saved as C:\sandhyaa\AI-ve\my_ml_project\my_model_retrained_1.h5
