@@ -1,0 +1,79 @@
+Oversampled Training Data Shape: (24408, 256, 2, 1)
+Training Data Shape: (19526, 256, 2, 1)
+Testing Data Shape: (4882, 256, 2, 1)
+Loading existing model from C:\sandhyaa\ai\my_model.h5
+Error loading model, building a new one. Error: Unrecognized keyword arguments: ['batch_shape']
+2025-04-06 02:16:40.141812: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-04-06 02:16:40.380478: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 4056 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 2060, pci bus id: 0000:09:00.0, compute capability: 7.5
+Training the model for 100 epochs...
+Epoch 1/40
+2025-04-06 02:16:41.415753: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8907
+2025-04-06 02:16:47.727829: W tensorflow/core/common_runtime/bfc_allocator.cc:360] Garbage collection: deallocate free memory regions (i.e., allocations) so that we can re-allocate a larger region to avoid OOM due to memory fragmentation. If you see this message frequently, you are running near the threshold of the available device memory and re-allocation may incur great performance overhead. You may try smaller batch sizes to observe the performance impact. Set TF_ENABLE_GPU_GARBAGE_COLLECTION=false if you'd like to disable this feature.
+489/489 [==============================] - 10s 6ms/step - loss: 1.6548 - accuracy: 0.2478 - val_loss: 1.5654 - val_accuracy: 0.2596 - lr: 5.0000e-04
+Epoch 2/40
+489/489 [==============================] - 2s 5ms/step - loss: 1.5324 - accuracy: 0.2551 - val_loss: 1.5012 - val_accuracy: 0.2386 - lr: 5.0000e-04
+Epoch 3/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.4802 - accuracy: 0.2557 - val_loss: 1.4599 - val_accuracy: 0.2386 - lr: 5.0000e-04
+Epoch 4/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.4482 - accuracy: 0.2533 - val_loss: 1.4394 - val_accuracy: 0.2440 - lr: 5.0000e-04
+Epoch 5/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.4325 - accuracy: 0.2532 - val_loss: 1.4238 - val_accuracy: 0.2386 - lr: 5.0000e-04
+Epoch 6/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.4198 - accuracy: 0.2498 - val_loss: 1.4193 - val_accuracy: 0.2422 - lr: 5.0000e-04
+Epoch 7/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.4120 - accuracy: 0.2560 - val_loss: 1.4096 - val_accuracy: 0.2417 - lr: 5.0000e-04
+Epoch 8/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.4037 - accuracy: 0.2523 - val_loss: 1.4022 - val_accuracy: 0.2391 - lr: 5.0000e-04
+Epoch 9/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3976 - accuracy: 0.2585 - val_loss: 1.3980 - val_accuracy: 0.2394 - lr: 5.0000e-04
+Epoch 10/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3940 - accuracy: 0.2563 - val_loss: 1.3953 - val_accuracy: 0.2414 - lr: 5.0000e-04
+Epoch 11/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3920 - accuracy: 0.2553 - val_loss: 1.3947 - val_accuracy: 0.2409 - lr: 5.0000e-04
+Epoch 12/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3900 - accuracy: 0.2569 - val_loss: 1.3918 - val_accuracy: 0.2465 - lr: 5.0000e-04
+Epoch 13/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3889 - accuracy: 0.2642 - val_loss: 1.3921 - val_accuracy: 0.2501 - lr: 5.0000e-04
+Epoch 14/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3893 - accuracy: 0.2665 - val_loss: 1.3903 - val_accuracy: 0.2524 - lr: 5.0000e-04
+Epoch 15/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3884 - accuracy: 0.2673 - val_loss: 1.3913 - val_accuracy: 0.2586 - lr: 5.0000e-04
+Epoch 16/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3882 - accuracy: 0.2695 - val_loss: 1.3907 - val_accuracy: 0.2550 - lr: 5.0000e-04
+Epoch 17/40
+488/489 [============================>.] - ETA: 0s - loss: 1.3877 - accuracy: 0.2668
+Epoch 17: ReduceLROnPlateau reducing learning rate to 0.0002500000118743628.
+489/489 [==============================] - 3s 6ms/step - loss: 1.3877 - accuracy: 0.2669 - val_loss: 1.3923 - val_accuracy: 0.2486 - lr: 5.0000e-04
+Epoch 18/40
+489/489 [==============================] - 3s 6ms/step - loss: 1.3869 - accuracy: 0.2695 - val_loss: 1.3900 - val_accuracy: 0.2535 - lr: 2.5000e-04
+Epoch 19/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3857 - accuracy: 0.2743 - val_loss: 1.3902 - val_accuracy: 0.2565 - lr: 2.5000e-04
+Epoch 20/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3859 - accuracy: 0.2731 - val_loss: 1.3882 - val_accuracy: 0.2622 - lr: 2.5000e-04
+Epoch 21/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3849 - accuracy: 0.2739 - val_loss: 1.3896 - val_accuracy: 0.2563 - lr: 2.5000e-04
+Epoch 22/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3845 - accuracy: 0.2796 - val_loss: 1.3897 - val_accuracy: 0.2578 - lr: 2.5000e-04
+Epoch 23/40
+482/489 [============================>.] - ETA: 0s - loss: 1.3851 - accuracy: 0.2767
+Epoch 23: ReduceLROnPlateau reducing learning rate to 0.0001250000059371814.
+489/489 [==============================] - 3s 5ms/step - loss: 1.3851 - accuracy: 0.2766 - val_loss: 1.3903 - val_accuracy: 0.2535 - lr: 2.5000e-04
+489/489 [==============================] - 3s 5ms/step - loss: 1.3824 - accuracy: 0.2837 - val_loss: 1.3882 - val_accuracy: 0.2680 - lr: 1.2500e-04
+Epoch 25/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3832 - accuracy: 0.2796 - val_loss: 1.3891 - val_accuracy: 0.2642 - lr: 1.2500e-04
+Epoch 26/40
+480/489 [============================>.] - ETA: 0s - loss: 1.3814 - accuracy: 0.2883
+Epoch 26: ReduceLROnPlateau reducing learning rate to 6.25000029685907e-05.
+489/489 [==============================] - 3s 5ms/step - loss: 1.3814 - accuracy: 0.2878 - val_loss: 1.3888 - val_accuracy: 0.2652 - lr: 1.2500e-04
+Epoch 27/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3800 - accuracy: 0.2864 - val_loss: 1.3886 - val_accuracy: 0.2714 - lr: 6.2500e-05
+Epoch 28/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3800 - accuracy: 0.2887 - val_loss: 1.3886 - val_accuracy: 0.2637 - lr: 6.2500e-05
+Epoch 29/40
+489/489 [==============================] - ETA: 0s - loss: 1.3805 - accuracy: 0.2830
+Epoch 29: ReduceLROnPlateau reducing learning rate to 3.125000148429535e-05.
+489/489 [==============================] - 3s 5ms/step - loss: 1.3805 - accuracy: 0.2830 - val_loss: 1.3882 - val_accuracy: 0.2609 - lr: 6.2500e-05
+Epoch 30/40
+489/489 [==============================] - 3s 5ms/step - loss: 1.3792 - accuracy: 0.2935 - val_loss: 1.3882 - val_accuracy: 0.2586 - lr: 3.1250e-05
+Model saved as C:\sandhyaa\AI-ve\my_ml_project\my_model_retrained.h5
