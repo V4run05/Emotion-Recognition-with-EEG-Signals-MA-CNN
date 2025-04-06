@@ -13,21 +13,22 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 from imblearn.over_sampling import RandomOverSampler
 import matplotlib.pyplot as plt
+import warnings
 from umap.umap_ import UMAP  # Ensure umap-learn is installed
-
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # -------- CONFIG CONSTANTS --------
 N_CHANNELS = 62          # Original number of EEG channels
-REDUCED_CHANNELS = 4     # New channel dimension after applying manifold learning (UMAP)
+REDUCED_CHANNELS = 2     # New channel dimension after applying manifold learning (UMAP)
 SAMPLING_RATE = 200      # Hz (downsampled from 1000Hz)
-SAMPLES_PER_EPOCH = 256  # Epoch length in samples
+SAMPLES_PER_EPOCH = 800  # Epoch length in samples
 NUM_CLASSES = 4          # SEED-IV has 4 classes (0: Neutral, 1: Sad, 2: Fear, 3: Happy)
 
 # -------- UMAP PARAMETERS (adjust these to experiment) --------
 umap_params = {
-    'n_neighbors': 15,
+    'n_neighbors': 30,
     'n_components': REDUCED_CHANNELS,
-    'min_dist': 0.05,
+    'min_dist': 0.01,
     'metric': "euclidean",
     'random_state': 42,
     'batch_size': 2000  # Adjust batch size if needed
@@ -185,28 +186,28 @@ def build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM
     inputs = tf.keras.Input(shape=input_shape + (1,))  # expects (256, reduced_channels, 1)
     
     # First convolution block
-    x = tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same',
+    x = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same',
                                kernel_regularizer=tf.keras.regularizers.l2(1e-3))(inputs)
     x = tf.keras.layers.MaxPooling2D((2, 1))(x)  # pool size (2,1) keeps width >= 1
-    x = tf.keras.layers.Dropout(0.5)(x)
+    x = tf.keras.layers.Dropout(0.3)(x)
     
     # Second convolution block (new)
-    x = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same',
+    x = tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same',
                                kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
     x = tf.keras.layers.MaxPooling2D((2, 1))(x)
-    x = tf.keras.layers.Dropout(0.5)(x)
+    x = tf.keras.layers.Dropout(0.3)(x)
     
     # Third convolution block (new)
-    x = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same',
+    x = tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same',
                                kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
     x = tf.keras.layers.MaxPooling2D((2, 1))(x)
-    x = tf.keras.layers.Dropout(0.5)(x)
+    x = tf.keras.layers.Dropout(0.3)(x)
     
     # Flatten and fully connected layers
     x = tf.keras.layers.Flatten()(x)
     x = tf.keras.layers.Dense(256, activation='relu',
                               kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
-    x = tf.keras.layers.Dropout(0.4)(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
     outputs = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
     
     model = tf.keras.Model(inputs, outputs)
@@ -356,11 +357,11 @@ if __name__ == "__main__":
     print("Building a new model.")
     model = build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
     
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=5e-4),
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
                   loss='categorical_crossentropy', metrics=['accuracy'])
     
-    lr_reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, verbose=1)
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+    lr_reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10, verbose=1)
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
     
     print("Training the model for 40 epochs...")
     history = model.fit(X_train, y_train, validation_split=0.2, shuffle=True,
@@ -373,6 +374,6 @@ if __name__ == "__main__":
 
 
     # Save the retrained model
-    retrained_model_path = r"C:\sandhyaa\AI-ve\my_ml_project\my_model_retrained_1.h5"
+    retrained_model_path = r"C:\sandhyaa\AI-ve\my_ml_project\my_model_trained_3.h5"
     model.save(retrained_model_path)
     print("Model saved as", retrained_model_path)
