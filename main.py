@@ -5,6 +5,8 @@ import re
 from scipy.signal import butter, filtfilt, iirnotch
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import KFold
+from sklearn.manifold import TSNE
 import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import Model, load_model
@@ -13,13 +15,16 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 from imblearn.over_sampling import RandomOverSampler
 import matplotlib.pyplot as plt
+import plotly.express as px
+import seaborn as sns
+import pandas as pd
 import warnings
 from umap.umap_ import UMAP  # Ensure umap-learn is installed
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # -------- CONFIG CONSTANTS --------
 N_CHANNELS = 62          # Original number of EEG channels
-REDUCED_CHANNELS = 2     # New channel dimension after applying manifold learning (UMAP)
+REDUCED_CHANNELS = 8     # New channel dimension after applying manifold learning (UMAP)
 SAMPLING_RATE = 200      # Hz (downsampled from 1000Hz)
 SAMPLES_PER_EPOCH = 800  # Epoch length in samples
 NUM_CLASSES = 4          # SEED-IV has 4 classes (0: Neutral, 1: Sad, 2: Fear, 3: Happy)
@@ -70,6 +75,20 @@ def find_eeg_keys(mat_dict, pattern=EEG_KEY_PATTERN):
                     result[fld] = val[fld][0,0]
                 return result
     return {}
+
+def create_ensemble(X_train, y_train, X_test, num_models=3):
+    models = []
+    for i in range(num_models):
+        model = build_eeg_model()
+        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        model.fit(X_train, y_train, epochs=30, batch_size=32, verbose=0)
+        models.append(model)
+    
+    # Make predictions with each model
+    predictions = [model.predict(X_test) for model in models]
+    # Average the predictions
+    ensemble_pred = np.mean(predictions, axis=0)
+    return ensemble_pred
 
 # -------- STEP 1: LOAD DATASET --------
 def load_seed_dataset(mat_path):
@@ -161,6 +180,32 @@ def scale_dataset(X):
     X_scaled = scaler.fit_transform(X_reshaped)
     return X_scaled.reshape(original_shape)
 
+def extract_frequency_features(eeg_data):
+    """Extract frequency domain features using FFT"""
+    from scipy.fft import fft
+    features = []
+    for epoch in eeg_data:
+        # Calculate power spectrum for each channel
+        fft_features = np.abs(fft(epoch, axis=1)[:, :SAMPLES_PER_EPOCH//2])
+        # Extract band powers (delta, theta, alpha, beta, gamma)
+        delta = np.mean(fft_features[:, 1:4], axis=1)  # 0.5-4 Hz
+        theta = np.mean(fft_features[:, 4:8], axis=1)  # 4-8 Hz
+        alpha = np.mean(fft_features[:, 8:13], axis=1)  # 8-13 Hz
+        beta = np.mean(fft_features[:, 13:30], axis=1)  # 13-30 Hz
+        gamma = np.mean(fft_features[:, 30:45], axis=1)  # 30-45 Hz
+        # Combine features
+        combined = np.vstack([delta, theta, alpha, beta, gamma]).T
+        features.append(combined)
+    return np.array(features)
+
+def augment_eeg(X, y, noise_level=0.05):
+    """Add Gaussian noise to EEG data for augmentation"""
+    X_aug = X.copy()
+    # Add random noise
+    noise = np.random.normal(0, noise_level, X_aug.shape)
+    X_aug += noise
+    return X_aug, y
+
 # -------- MANIFOLD LEARNING: APPLY UMAP --------
 def apply_umap(X, n_components=REDUCED_CHANNELS, batch_size=umap_params['batch_size']):
     total_epochs, time, channels, _ = X.shape
@@ -182,36 +227,42 @@ def apply_umap(X, n_components=REDUCED_CHANNELS, batch_size=umap_params['batch_s
 
 
 # -------- STEP 3: BUILD CNN MODEL --------
-def build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES):
-    inputs = tf.keras.Input(shape=input_shape + (1,))  # expects (256, reduced_channels, 1)
+def build_eeg_model(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES):
+    inputs = tf.keras.Input(shape=input_shape + (1,))
     
-    # First convolution block
-    x = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same',
-                               kernel_regularizer=tf.keras.regularizers.l2(1e-3))(inputs)
-    x = tf.keras.layers.MaxPooling2D((2, 1))(x)  # pool size (2,1) keeps width >= 1
-    x = tf.keras.layers.Dropout(0.3)(x)
-    
-    # Second convolution block (new)
-    x = tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same',
-                               kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
+    # Temporal convolutions (across time)
+    x = tf.keras.layers.Conv2D(128, (10, 1), padding='same', activation='elu')(inputs)
+    x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.MaxPooling2D((2, 1))(x)
-    x = tf.keras.layers.Dropout(0.3)(x)
-    
-    # Third convolution block (new)
-    x = tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same',
-                               kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
-    x = tf.keras.layers.MaxPooling2D((2, 1))(x)
-    x = tf.keras.layers.Dropout(0.3)(x)
-    
-    # Flatten and fully connected layers
-    x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Dense(256, activation='relu',
-                              kernel_regularizer=tf.keras.regularizers.l2(1e-3))(x)
     x = tf.keras.layers.Dropout(0.2)(x)
+    
+    # Spatial convolutions (across channels)
+    x = tf.keras.layers.Conv2D(128, (1, REDUCED_CHANNELS), padding='valid', activation='elu')(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.MaxPooling2D((2, 1))(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
+    
+    # Further temporal processing
+    x = tf.keras.layers.Conv2D(256, (10, 1), padding='same', activation='elu')(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.MaxPooling2D((2, 1))(x)
+    x = tf.keras.layers.Dropout(0.3)(x)
+    
+    # Classification layers
+    x = tf.keras.layers.Flatten()(x)
+    x = tf.keras.layers.Dense(128, activation='elu', kernel_regularizer=l2(1e-4))(x)
+    x = tf.keras.layers.Dropout(0.4)(x)
     outputs = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
     
     model = tf.keras.Model(inputs, outputs)
     return model
+
+# Use a learning rate scheduler
+def lr_schedule(epoch):
+    initial_lr = 0.001
+    if epoch > 20:
+        return initial_lr * 0.1
+    return initial_lr
 
 # -------- STEP 4: DATA PIPELINE --------
 def seed_data_pipeline(mat_paths):
@@ -266,29 +317,62 @@ def plot_history(history, title="Reduced dataset"):
     ax2.grid(True)
     ax2.legend()
     plt.show()
-
+    
 def plot_reduced_dataset(X, y, title="Reduced dataset"):
     """
     Plot the UMAP-reduced data in 2D.
     X is expected to have shape (samples, time, REDUCED_CHANNELS, 1).
-    We'll average over the time dimension so that each sample is represented by a 2D point.
+    We average over the time dimension so that each sample is represented by a vector.
+    If the number of UMAP dimensions is greater than 2, apply t-SNE to reduce to 2D.
     y is expected to be one-hot encoded.
     """
-    # Squeeze the last dimension (if it's 1) and average across time.
+    # Average over the time dimension.
     X_mean = np.mean(X.squeeze(-1), axis=1)  # shape: (samples, REDUCED_CHANNELS)
-    # Get the label index from one-hot encoding.
+    
+    # If the data has more than 2 dimensions, use t-SNE to reduce it to 2D.
+    if X_mean.shape[1] > 2:
+        tsne = TSNE(n_components=2, random_state=42)
+        X_plot = tsne.fit_transform(X_mean)
+    else:
+        X_plot = X_mean
+    
     labels = np.argmax(y, axis=1)
     
     plt.figure(figsize=(8, 6))
     for c in np.unique(labels):
         idx = labels == c
-        plt.scatter(X_mean[idx, 0], X_mean[idx, 1], label=f"Class {c}", alpha=0.6)
+        plt.scatter(X_plot[idx, 0], X_plot[idx, 1], label=f"Class {c}", alpha=0.6)
     plt.title(title)
-    plt.xlabel("UMAP Dimension 1")
-    plt.ylabel("UMAP Dimension 2")
+    plt.xlabel("t-SNE Dimension 1")
+    plt.ylabel("t-SNE Dimension 2")
     plt.legend()
     plt.show()
+    
+def plot_3d_reduced_dataset(X, y, title="3D Reduced dataset"):
+    # Average across time.
+    X_mean = np.mean(X.squeeze(-1), axis=1)  # shape: (samples, REDUCED_CHANNELS)
+    if X_mean.shape[1] > 3:
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=3)
+        X_plot = pca.fit_transform(X_mean)
+    else:
+        X_plot = X_mean
+    labels = np.argmax(y, axis=1)
+    data = np.column_stack((X_plot, labels))
+    df = pd.DataFrame(data, columns=['Dim 1', 'Dim 2', 'Dim 3', 'Label'])
+    fig = px.scatter_3d(df, x='Dim 1', y='Dim 2', z='Dim 3', color='Label',
+                        title=title)
+    fig.show()
 
+def plot_pairwise(X, y, title="Pairwise Scatter Matrix"):
+    X_mean = np.mean(X.squeeze(-1), axis=1)
+    labels = np.argmax(y, axis=1)
+    df = pd.DataFrame(X_mean, columns=[f"Dim {i+1}" for i in range(X_mean.shape[1])])
+    df['Label'] = labels
+    sns.pairplot(df, hue='Label', diag_kind='hist')
+    plt.suptitle(title)
+    plt.show()
+    
 # -------- MAIN EXECUTION --------
 if __name__ == "__main__":
     # Ensure GPU is used if available
@@ -337,43 +421,57 @@ if __name__ == "__main__":
         r"C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\2\14_20151208.mat",
         r"C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\2\15_20150514.mat"
     ]
-    
     X_train, X_test, y_train, y_test = seed_data_pipeline(dataset_paths)
-    print("Training Data Shape:", X_train.shape)
-    print("Testing Data Shape:", X_test.shape)
+    print("Initial Training Data Shape:", X_train.shape)
+    print("Initial Testing Data Shape:", X_test.shape)
     
-    # If retraining an existing model, load it; otherwise, build a new model.
-    # model_path = r"C:\sandhyaa\ai\my_model.h5"
-    # if os.path.exists(model_path):
-    #     try:
-    #         print("Loading existing model from", model_path)
-    #         model = tf.keras.models.load_model(model_path)
-    #     except Exception as e:
-    #         print("Error loading model, building a new one. Error:", e)
-    #         model = build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
-    # else:
+    X_train_aug, y_train_aug = augment_eeg(X_train, y_train)
+    X_train = np.concatenate([X_train, X_train_aug], axis=0)
+    y_train = np.concatenate([y_train, y_train_aug], axis=0)
+    print("Augmented Training Data Shape:", X_train.shape)
     
-    # Creating new model
+    # Creating new model    
     print("Building a new model.")
-    model = build_cnn(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
+    model = build_eeg_model(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
     
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-                  loss='categorical_crossentropy', metrics=['accuracy'])
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.002, clipnorm=1.0)
+    model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
     
-    lr_reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10, verbose=1)
+    lr_scheduler = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
     
     print("Training the model for 40 epochs...")
     history = model.fit(X_train, y_train, validation_split=0.2, shuffle=True,
-                        epochs=40, batch_size=32, callbacks=[lr_reduce, early_stop])
+                        epochs=40, batch_size=32, callbacks=[lr_scheduler, early_stop])
     
     plot_history(history, title="Training Process")
     
     # Plot the UMAP-reduced training data
     plot_reduced_dataset(X_train, y_train, title="UMAP Reduced Training Data")
-
-
+    plot_3d_reduced_dataset(X_train, y_train, title="3D Reduced dataset")
+    plot_pairwise(X_train, y_train, title="Pairwise Scatter Matrix")
+    
+    #KFold cross-validation code
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    fold_accuracies = []
+    for fold, (train_idx, val_idx) in enumerate(kf.split(X_train)):
+        print(f"Training fold {fold+1}/5...")
+        X_fold_train, X_fold_val = X_train[train_idx], X_train[val_idx]
+        y_fold_train, y_fold_val = y_train[train_idx], y_train[val_idx]
+        
+        model = build_eeg_model()
+        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
+        
+        history = model.fit(X_fold_train, y_fold_train, 
+                            validation_data=(X_fold_val, y_fold_val),
+                            epochs=50, batch_size=32, 
+                            callbacks=[early_stop, lr_scheduler])
+        
+        fold_accuracies.append(max(history.history['val_accuracy']))
+        
+    print(f"Average validation accuracy: {np.mean(fold_accuracies):.4f}")
+    
     # Save the retrained model
-    retrained_model_path = r"C:\sandhyaa\AI-ve\my_ml_project\my_model_trained_3.h5"
+    retrained_model_path = r"C:\sandhyaa\AI-ve\my_ml_project\my_model_trained_4.h5"
     model.save(retrained_model_path)
     print("Model saved as", retrained_model_path)
