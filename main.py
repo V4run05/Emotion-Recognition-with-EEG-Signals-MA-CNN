@@ -39,13 +39,19 @@ umap_params = {
     'batch_size': 2000  # Adjust batch size if needed
 }
 
-# Directory containing .mat files for SEED-IV (session 1)
-DATASET_DIR = r"C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\1"
-
 # Regex pattern to match EEG trial keys (e.g., "ha_eeg1", "cz_eeg24")
 EEG_KEY_PATTERN = re.compile(r".+_eeg\d+$")
-# Session 1 labels from ReadMe.txt
+# Session 1-3 labels from ReadMe.txt
 SESSION1_LABEL = np.array([1,2,3,0,2,0,0,1,0,1,2,1,1,1,2,3,2,2,3,3,0,3,0,3])
+SESSION2_LABEL = np.array([2,1,3,0,0,2,0,2,3,3,2,3,2,0,1,1,2,1,0,3,0,1,3,1])
+SESSION3_LABEL = np.array([1,2,2,1,3,3,3,1,1,2,1,0,2,3,3,0,2,3,0,0,2,0,1,0])
+
+# Create a dictionary mapping session numbers to label arrays
+SESSION_LABELS = {
+    1: SESSION1_LABEL,
+    2: SESSION2_LABEL,
+    3: SESSION3_LABEL
+}
 
 # -------- GPU MEMORY GROWTH SETUP --------
 if tf.config.list_physical_devices('GPU'):
@@ -91,20 +97,22 @@ def create_ensemble(X_train, y_train, X_test, num_models=3):
     return ensemble_pred
 
 # -------- STEP 1: LOAD DATASET --------
-def load_seed_dataset(mat_path):
+def load_seed_dataset(mat_path, session_number=1):
     """
-    Load EEG data and labels from a .mat file for SEED-IV session 1.
+    Load EEG data and labels from a .mat file.
     It detects trial keys, truncates each trial to the same length,
-    splits into epochs, and assigns labels.
+    splits into epochs, and assigns labels for the specified session.
     If a file doesn't contain enough samples for even one epoch, it is skipped.
     """
     try:
         mat_data = sio.loadmat(mat_path, squeeze_me=True, struct_as_record=False)
     except Exception as e:
         raise ValueError(f"Error loading {mat_path}: {e}")
+    
     eeg_dict = find_eeg_keys(mat_data, EEG_KEY_PATTERN)
     if not eeg_dict:
         raise ValueError(f"No EEG trial keys found in file: {mat_path}")
+    
     sorted_keys = sorted(eeg_dict.keys(), key=lambda x: int(x.split("eeg")[-1]))
     min_length = min(eeg_dict[k].shape[1] for k in sorted_keys)
     trials = [eeg_dict[k][:, :min_length] for k in sorted_keys]
@@ -124,15 +132,22 @@ def load_seed_dataset(mat_path):
         raise ValueError(f"Not enough data in file: {mat_path}")
     eeg_data = np.concatenate(epochs_list, axis=0)  # (total_epochs, 62, segment_length)
     
-    if len(SESSION1_LABEL) != len(sorted_keys):
-        raise ValueError(f"Mismatch: Found {len(sorted_keys)} trials but {len(SESSION1_LABEL)} labels in {mat_path}")
+    # Get the label array for the specified session.
+    if session_number not in SESSION_LABELS:
+        raise ValueError("session_number must be 1, 2, or 3.")
+    expected_labels = SESSION_LABELS[session_number]
+    
+    if len(expected_labels) != len(sorted_keys):
+        raise ValueError(f"Mismatch: Found {len(sorted_keys)} trials but {len(expected_labels)} labels in {mat_path}")
+    
     epochs_per_trial = epochs_list[0].shape[0]
     labels = []
-    for label in SESSION1_LABEL:
+    for label in expected_labels:
         labels.extend([label] * epochs_per_trial)
     labels = np.array(labels)
     
     return eeg_data, labels
+
 
 # -------- STEP 2: PREPROCESS DATA --------
 def preprocess_seed_eeg(eeg_data):
@@ -265,11 +280,11 @@ def lr_schedule(epoch):
     return initial_lr
 
 # -------- STEP 4: DATA PIPELINE --------
-def seed_data_pipeline(mat_paths):
+def seed_data_pipeline(mat_paths, session_number):
     X_data, y_labels = [], []
     for path in mat_paths:
         try:
-            eeg_data_raw, labels_raw = load_seed_dataset(path)
+            eeg_data_raw, labels_raw = load_seed_dataset(path, session_number=session_number)
         except ValueError as e:
             print(f"Skipping file {path}: {e}")
             continue
@@ -322,31 +337,40 @@ def plot_reduced_dataset(X, y, title="Reduced dataset"):
     """
     Plot the UMAP-reduced data in 2D.
     X is expected to have shape (samples, time, REDUCED_CHANNELS, 1).
-    We average over the time dimension so that each sample is represented by a vector.
-    If the number of UMAP dimensions is greater than 2, apply t-SNE to reduce to 2D.
+    Instead of averaging over time, this function uses the first time slice.
+    If REDUCED_CHANNELS > 2, further reduce the features to 2D using UMAP.
     y is expected to be one-hot encoded.
     """
-    # Average over the time dimension.
-    X_mean = np.mean(X.squeeze(-1), axis=1)  # shape: (samples, REDUCED_CHANNELS)
+    # Choose a specific time slice from each sample (here, the first time slice)
+    X_reduced = X[:, 0, :, 0]  # Shape: (samples, REDUCED_CHANNELS)
     
-    # If the data has more than 2 dimensions, use t-SNE to reduce it to 2D.
-    if X_mean.shape[1] > 2:
-        tsne = TSNE(n_components=2, random_state=42)
-        X_plot = tsne.fit_transform(X_mean)
+    # If the reduced dimension is more than 2, use UMAP to reduce to 2D.
+    if X_reduced.shape[1] > 2:
+        reducer2d = UMAP(
+            n_neighbors=umap_params['n_neighbors'],
+            n_components=2,
+            min_dist=umap_params['min_dist'],
+            metric=umap_params['metric'],
+            random_state=umap_params['random_state']
+        )
+        X_plot = reducer2d.fit_transform(X_reduced)
     else:
-        X_plot = X_mean
-    
+        X_plot = X_reduced
+
+    # Obtain class labels from the one-hot encoding
     labels = np.argmax(y, axis=1)
-    
+
+    # Plot using matplotlib
     plt.figure(figsize=(8, 6))
     for c in np.unique(labels):
         idx = labels == c
         plt.scatter(X_plot[idx, 0], X_plot[idx, 1], label=f"Class {c}", alpha=0.6)
     plt.title(title)
-    plt.xlabel("t-SNE Dimension 1")
-    plt.ylabel("t-SNE Dimension 2")
+    plt.xlabel("UMAP Dimension 1")
+    plt.ylabel("UMAP Dimension 2")
     plt.legend()
     plt.show()
+
     
 def plot_3d_reduced_dataset(X, y, title="3D Reduced dataset"):
     # Average across time.
@@ -419,32 +443,57 @@ if __name__ == "__main__":
         r"C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\2\12_20150804.mat",
         r"C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\2\13_20151125.mat",
         r"C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\2\14_20151208.mat",
-        r"C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\2\15_20150514.mat"
+        r"C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\2\15_20150514.mat",
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\1_20161126.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\2_20151012.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\3_20151101.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\4_20151123.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\5_20160420.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\6_20150512.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\7_20150721.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\8_20151117.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\9_20151209.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\10_20151023.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\11_20151011.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\12_20150807.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\13_20161130.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\14_20151215.mat',
+        r'C:\sandhyaa\AI-ve\my_ml_project\seed_iv\eeg_raw_data\3\15_20150527.mat'
     ]
-    X_train, X_test, y_train, y_test = seed_data_pipeline(dataset_paths)
-    print("Initial Training Data Shape:", X_train.shape)
-    print("Initial Testing Data Shape:", X_test.shape)
-    
-    X_train_aug, y_train_aug = augment_eeg(X_train, y_train)
-    X_train = np.concatenate([X_train, X_train_aug], axis=0)
-    y_train = np.concatenate([y_train, y_train_aug], axis=0)
-    print("Augmented Training Data Shape:", X_train.shape)
-    
-    # Creating new model    
-    print("Building a new model.")
+    session_numbers = [1, 2, 3]
+    X_train_list, X_test_list, y_train_list, y_test_list = [], [], [], []
+
+    for session in session_numbers:
+        print(f"Processing session {session} data...")
+        # Call seed_data_pipeline for each session separately. 
+        X_train_s, X_test_s, y_train_s, y_test_s = seed_data_pipeline(dataset_paths, session_number=session)
+        X_train_list.append(X_train_s)
+        X_test_list.append(X_test_s)
+        y_train_list.append(y_train_s)
+        y_test_list.append(y_test_s)
+
+    # Combine the data from all sessions
+    X_train_combined = np.concatenate(X_train_list, axis=0)
+    X_test_combined = np.concatenate(X_test_list, axis=0)
+    y_train_combined = np.concatenate(y_train_list, axis=0)
+    y_test_combined = np.concatenate(y_test_list, axis=0)
+
+    print("Combined Training Data Shape:", X_train_combined.shape)
+    print("Combined Testing Data Shape:", X_test_combined.shape)
+
+    # Proceed with training using combined data:
     model = build_eeg_model(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_classes=NUM_CLASSES)
-    
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.002, clipnorm=1.0)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001, clipnorm=1.0)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
-    
+
     lr_scheduler = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
-    
-    print("Training the model for 40 epochs...")
-    history = model.fit(X_train, y_train, validation_split=0.2, shuffle=True,
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True) 
+
+    print("Training the combined model for 40 epochs...")
+    history = model.fit(X_train_combined, y_train_combined, validation_split=0.2, shuffle=True,
                         epochs=40, batch_size=32, callbacks=[lr_scheduler, early_stop])
-    
-    plot_history(history, title="Training Process")
+                        
+    plot_history(history, title="Combined Training Process")
     
     # Plot the UMAP-reduced training data
     plot_reduced_dataset(X_train, y_train, title="UMAP Reduced Training Data")
