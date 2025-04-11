@@ -13,6 +13,7 @@ from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, Dropout
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
+from tensorflow.keras import mixed_precision
 from imblearn.over_sampling import RandomOverSampler
 import matplotlib.pyplot as plt
 import plotly.express as px
@@ -21,6 +22,8 @@ import pandas as pd
 import warnings
 from umap.umap_ import UMAP  # Ensure umap-learn is installed
 warnings.simplefilter(action='ignore', category=FutureWarning)
+# Set the global policy
+mixed_precision.set_global_policy('mixed_float16')
 
 # -------- CONFIG CONSTANTS --------
 N_CHANNELS = 62          # Original number of EEG channels
@@ -81,20 +84,6 @@ def find_eeg_keys(mat_dict, pattern=EEG_KEY_PATTERN):
                     result[fld] = val[fld][0,0]
                 return result
     return {}
-
-def create_ensemble(X_train, y_train, X_test, num_models=3):
-    models = []
-    for i in range(num_models):
-        model = build_eeg_model()
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        model.fit(X_train, y_train, epochs=30, batch_size=32, verbose=0)
-        models.append(model)
-    
-    # Make predictions with each model
-    predictions = [model.predict(X_test) for model in models]
-    # Average the predictions
-    ensemble_pred = np.mean(predictions, axis=0)
-    return ensemble_pred
 
 # -------- STEP 1: LOAD DATASET --------
 def load_seed_dataset(mat_path, session_number=1):
@@ -246,38 +235,31 @@ def build_eeg_model(input_shape=(SAMPLES_PER_EPOCH, REDUCED_CHANNELS), num_class
     inputs = tf.keras.Input(shape=input_shape + (1,))
     
     # Temporal convolutions (across time)
-    x = tf.keras.layers.Conv2D(128, (10, 1), padding='same', activation='elu')(inputs)
+    x = tf.keras.layers.Conv2D(128, (10, 1), padding='same', activation='elu', kernel_regularizer=l2(1e-3))(inputs)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.MaxPooling2D((2, 1))(x)
     x = tf.keras.layers.Dropout(0.2)(x)
     
     # Spatial convolutions (across channels)
-    x = tf.keras.layers.Conv2D(128, (1, REDUCED_CHANNELS), padding='valid', activation='elu')(x)
+    x = tf.keras.layers.Conv2D(128, (1, REDUCED_CHANNELS), padding='valid', activation='elu', kernel_regularizer=l2(1e-3))(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.MaxPooling2D((2, 1))(x)
     x = tf.keras.layers.Dropout(0.2)(x)
     
     # Further temporal processing
-    x = tf.keras.layers.Conv2D(256, (10, 1), padding='same', activation='elu')(x)
+    x = tf.keras.layers.Conv2D(256, (10, 1), padding='same', activation='elu', kernel_regularizer=l2(1e-3))(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.MaxPooling2D((2, 1))(x)
     x = tf.keras.layers.Dropout(0.3)(x)
     
     # Classification layers
     x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Dense(128, activation='elu', kernel_regularizer=l2(1e-4))(x)
+    x = tf.keras.layers.Dense(128, activation='elu', kernel_regularizer=l2(1e-3))(x)
     x = tf.keras.layers.Dropout(0.4)(x)
-    outputs = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
+    outputs = tf.keras.layers.Dense(num_classes, activation='softmax', kernel_regularizer=l2(1e-3))(x)
     
     model = tf.keras.Model(inputs, outputs)
     return model
-
-# Use a learning rate scheduler
-def lr_schedule(epoch):
-    initial_lr = 0.001
-    if epoch > 20:
-        return initial_lr * 0.1
-    return initial_lr
 
 # -------- STEP 4: DATA PIPELINE --------
 def seed_data_pipeline(mat_paths, session_number):
@@ -396,6 +378,52 @@ def plot_pairwise(X, y, title="Pairwise Scatter Matrix"):
     sns.pairplot(df, hue='Label', diag_kind='hist')
     plt.suptitle(title)
     plt.show()
+
+
+# First create a custom learning rate scheduler
+class GradualLearningRateScheduler(tf.keras.callbacks.Callback):
+    def __init__(self, initial_lr=0.001, min_lr=0.00001, warmup_epochs=5, patience=4, factor=0.8):
+        super(GradualLearningRateScheduler, self).init()
+        self.initial_lr = initial_lr
+        self.min_lr = min_lr
+        self.warmup_epochs = warmup_epochs
+        self.patience = patience
+        self.factor = factor
+        self.best_val_loss = float('inf')
+        self.wait = 0
+        
+    def on_epoch_begin(self, epoch, logs=None):
+        if epoch < self.warmup_epochs:
+            # Gradual warmup phase
+            lr = self.initial_lr * ((epoch + 1) / self.warmup_epochs)
+        else:
+            # Get the current learning rate
+            lr = tf.keras.backend.get_value(self.model.optimizer.lr)
+            
+        # Print for logging
+        print(f"\nEpoch {epoch+1}: Learning rate set to {lr}")
+        tf.keras.backend.set_value(self.model.optimizer.lr, lr)
+            
+    def on_epoch_end(self, epoch, logs=None):
+        # Skip during warmup
+        if epoch < self.warmup_epochs:
+            return
+            
+        # After warmup, implement ReduceLROnPlateau-like behavior
+        current_val_loss = logs.get('val_loss')
+        
+        if current_val_loss < self.best_val_loss:
+            self.best_val_loss = current_val_loss
+            self.wait = 0
+        else:
+            self.wait += 1
+            if self.wait >= self.patience:
+                old_lr = tf.keras.backend.get_value(self.model.optimizer.lr)
+                new_lr = max(old_lr * self.factor, self.min_lr)
+                tf.keras.backend.set_value(self.model.optimizer.lr, new_lr)
+                print(f"\nEpoch {epoch+1}: Reducing learning rate from {old_lr} to {new_lr}")
+                self.wait = 0  # Reset wait counter
+
     
 # -------- MAIN EXECUTION --------
 if __name__ == "__main__":
@@ -486,41 +514,29 @@ if __name__ == "__main__":
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001, clipnorm=1.0)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 
-    lr_scheduler = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True) 
+    # Create the callback
+    gradual_lr_scheduler = GradualLearningRateScheduler(
+        initial_lr=0.001,
+        min_lr=0.00001,
+        warmup_epochs=5,
+        patience=4,
+        factor=0.8  # Reduce by 20% each time
+    )
+
 
     print("Training the combined model for 40 epochs...")
     history = model.fit(X_train_combined, y_train_combined, validation_split=0.2, shuffle=True,
-                        epochs=40, batch_size=32, callbacks=[lr_scheduler, early_stop])
-                        
-    plot_history(history, title="Combined Training Process")
-    
-    # Plot the UMAP-reduced training data
-    plot_reduced_dataset(X_train, y_train, title="UMAP Reduced Training Data")
-    plot_3d_reduced_dataset(X_train, y_train, title="3D Reduced dataset")
-    plot_pairwise(X_train, y_train, title="Pairwise Scatter Matrix")
-    
-    #KFold cross-validation code
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    fold_accuracies = []
-    for fold, (train_idx, val_idx) in enumerate(kf.split(X_train)):
-        print(f"Training fold {fold+1}/5...")
-        X_fold_train, X_fold_val = X_train[train_idx], X_train[val_idx]
-        y_fold_train, y_fold_val = y_train[train_idx], y_train[val_idx]
-        
-        model = build_eeg_model()
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
-        
-        history = model.fit(X_fold_train, y_fold_train, 
-                            validation_data=(X_fold_val, y_fold_val),
-                            epochs=50, batch_size=32, 
-                            callbacks=[early_stop, lr_scheduler])
-        
-        fold_accuracies.append(max(history.history['val_accuracy']))
-        
-    print(f"Average validation accuracy: {np.mean(fold_accuracies):.4f}")
+                        epochs=40, batch_size=32, callbacks=[gradual_lr_scheduler, early_stop])
     
     # Save the retrained model
     retrained_model_path = r"C:\sandhyaa\AI-ve\my_ml_project\my_model_trained_4.h5"
     model.save(retrained_model_path)
     print("Model saved as", retrained_model_path)
+                        
+    plot_history(history, title="Combined Training Process")
+    
+    # Plot the UMAP-reduced training data
+    plot_reduced_dataset(X_train_combined, y_train_combined, title="UMAP Reduced Training Data")
+    plot_3d_reduced_dataset(X_train_combined, y_train_combined, title="3D Reduced dataset")
+    plot_pairwise(X_train_combined, y_train_combined, title="Pairwise Scatter Matrix")
